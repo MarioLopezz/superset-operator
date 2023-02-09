@@ -36,7 +36,7 @@ spec:
         name: wait-for-postgres-redis
       containers:
         - name: superset
-          image: kubernetesbigdataeg/superset:2.0.1-1
+          image: apache/superset
           imagePullPolicy: Always
           command: ["/bin/sh","-c",". /app/pythonpath/superset_bootstrap.sh; celery --app=superset.tasks.celery_app:app worker"]
           env:

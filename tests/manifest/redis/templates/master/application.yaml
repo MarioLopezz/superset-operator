@@ -1,5 +1,3 @@
----
-# Source: superset/charts/redis/templates/master/application.yaml
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
