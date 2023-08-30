@@ -1,4 +1,3 @@
-# Etapa de Node para construir activos del frontend.
 ARG PY_VER=3.9-slim
 ARG SUPERSET_VERSION=2.0.1
 
@@ -6,19 +5,16 @@ FROM node:16-slim AS superset-node
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
-# Instalar Git y clonar el proyecto
 RUN apt-get update && apt-get install -y git \
     && git clone https://github.com/apache/superset.git /app \
     && cd /app \
     && git checkout ${SUPERSET_VERSION} \
     && apt-get remove -y git && apt-get autoremove -y
 
-# Instalar dependencias del frontend y construirlo.
 WORKDIR /app/superset-frontend
 RUN npm ci
 RUN npm run build
 
-# Etapa Final para producción.
 FROM python:${PY_VER} AS production
 
 ENV LANG=C.UTF-8 \
@@ -29,7 +25,6 @@ ENV LANG=C.UTF-8 \
     SUPERSET_HOME="/app/superset_home" \
     SUPERSET_PORT=8088 
 
-# Instalar dependencias necesarias y configurar usuario.
 RUN mkdir -p ${PYTHONPATH} \
     && useradd --user-group -d ${SUPERSET_HOME} -m --no-log-init --shell /bin/bash superset \
     && apt-get update -y \
@@ -45,28 +40,24 @@ RUN mkdir -p ${PYTHONPATH} \
         libsasl2-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar archivos de requerimientos y configuración.
 COPY --from=superset-node /app/requirements /app/requirements
 COPY --from=superset-node /app/setup.py /app/
 COPY --from=superset-node /app/MANIFEST.in /app/
 COPY --from=superset-node /app/README.md /app/
 
-# Copiar version_info.json y assets del frontend.
 COPY --from=superset-node /app/superset-frontend/package.json /app/superset-frontend/
 RUN mkdir -p /app/superset/static && touch /app/superset/static/version_info.json
 COPY --from=superset-node /app/superset/static/assets /app/superset/static/assets
 
 RUN pip install --upgrade pip
 
-# Instalar Superset.
 COPY --from=superset-node /app/superset /app/superset
 RUN cd /app \
     && chown -R superset:superset * \
     && pip install --no-cache -r requirements/local.txt \
     && pip install -e . \
     && flask fab babel-compile --target superset/translations
-
-# Configuraciones finales.
+    
 COPY --from=superset-node /app/docker/run-server.sh /usr/bin/
 RUN chmod a+x /usr/bin/run-server.sh
 WORKDIR /app
