@@ -1,0 +1,29 @@
+domain: kubernetesbigdataeg.org
+layout:
+- go.kubebuilder.io/v3
+plugins:
+  deploy-image.go.kubebuilder.io/v1-alpha:
+    resources:
+    - domain: kubernetesbigdataeg.org
+      group: bigdata
+      kind: Superset
+      options:
+        containerCommand: memcached,-m=64,modern,-v
+        image: docker.io/kubernetesbigdataeg/superset:2.1.0-1
+        runAsUser: "1000"
+      version: v1alpha1
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}
+projectName: superset-operator
+repo: github.com/kubernetesbigdataeg/superset-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kubernetesbigdataeg.org
+  group: bigdata
+  kind: Superset
+  path: github.com/kubernetesbigdataeg/superset-operator/api/v1alpha1
+  version: v1alpha1
+version: "3"
