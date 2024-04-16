@@ -1,0 +1,31 @@
+# permissions for end users to edit supersets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: superset-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: superset-operator
+    app.kubernetes.io/part-of: superset-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: superset-editor-role
+rules:
+- apiGroups:
+  - bigdata.kubernetesbigdataeg.org
+  resources:
+  - supersets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - bigdata.kubernetesbigdataeg.org
+  resources:
+  - supersets/status
+  verbs:
+  - get

@@ -6,12 +6,12 @@ Apache Superset Kubernetes Operator based on Operator framework SDK.
 
 | Level | Funcionalitiy |  State |
 |-------|---------------|-------------------|
-| Level 0 | Planning Stage    | :heavy_check_mark: |
-| Level 1 | Basic Install     | :white_check_mark: |
-| Level 2 | Seamless Upgrades | :white_check_mark: |
-| Level 3 | Full Lifecycle    | :white_check_mark: |
-| Level 4 | Deep Insights     | :white_check_mark: |
-| Level 5 | Auto Pilot        | :white_check_mark: |
+| Level 0 | Planning Stage    | :white_check_mark: |
+| Level 1 | Basic Install     | :o: |
+| Level 2 | Seamless Upgrades | :o: |
+| Level 3 | Full Lifecycle    | :o: |
+| Level 4 | Deep Insights     | :o: |
+| Level 5 | Auto Pilot        | :o: |
 
 ## Description
 The Superset Operator manages Superset clusters deployed to Kubernetes and automates tasks related to operating a Superset cluster. 

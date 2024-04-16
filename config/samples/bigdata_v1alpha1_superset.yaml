@@ -1,0 +1,19 @@
+apiVersion: bigdata.kubernetesbigdataeg.org/v1alpha1
+kind: Superset
+metadata:
+  name: superset
+spec:
+  masterSize: 1
+  workerSize: 1
+  service:
+    uiNodePort: 30213
+  dbConnection:
+    redisHost: "superset-redis-headless.superset.svc.cluster.local"
+    redisPort: "6379"
+    dbHost: "postgresql-svc.kudu.svc.cluster.local"
+    dbPort: "5432"
+    dbUser: "postgres"
+    dbPass: "postgres"
+    dbName: "superset"
+
+  
