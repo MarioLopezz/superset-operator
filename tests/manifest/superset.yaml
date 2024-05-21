@@ -1,15 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: superset-svc
+  name: superset
+  namespace: default
   labels:
     app: superset
-  namespace: superset
 spec:
   type: NodePort
   ports:
-    - nodePort: 30013
-      port: 8088
+    - port: 8088
       protocol: TCP
       name: http
   selector:
@@ -19,9 +18,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: superset
+  namespace: default
   labels:
     app: superset
-  namespace: superset
 spec:
   replicas: 1
   selector:
@@ -29,30 +28,36 @@ spec:
       app: superset
   template:
     metadata:
+      annotations:
       labels:
         app: superset
     spec:
       securityContext:
         runAsUser: 0
       initContainers:
-      - command:
+      - name: wait-for-postgres
+        image: apache/superset:dockerize
+        imagePullPolicy: IfNotPresent
+        command:
         - /bin/sh
         - -c
         - dockerize -wait "tcp://$DB_HOST:$DB_PORT" -timeout 120s
         envFrom:
         - secretRef:
             name: 'superset-env'
-        image: 'jwilder/dockerize:latest'
-        imagePullPolicy: 'IfNotPresent'
-        name: wait-for-postgres
       containers:
         - name: superset
-          image: docker.io/kubernetesbigdataeg/superset:2.1.0-1
-          imagePullPolicy: Always
+          image: docker.io/kubernetesbigdataeg/superset:4.0.0-1
+          imagePullPolicy: IfNotPresent
           command: ["/bin/sh","-c",". /app/pythonpath/superset_bootstrap.sh; /usr/bin/run-server.sh"]
           env:
             - name: "SUPERSET_PORT"
               value: "8088"
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: superset-config
+                  key: SECRET_KEY
           envFrom:
             - secretRef:
                 name: "superset-env"
@@ -91,8 +96,6 @@ spec:
             periodSeconds: 15
             successThreshold: 1
             timeoutSeconds: 1
-          resources:
-            {}
       volumes:
         - name: superset-config
           secret:
@@ -102,9 +105,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: superset-worker
+  namespace: default
   labels:
     app: superset-worker
-  namespace: superset
 spec:
   replicas: 1
   selector:
@@ -118,7 +121,10 @@ spec:
       securityContext:
         runAsUser: 0
       initContainers:
-      - command:
+      - name: wait-for-postgres-redis        
+        image: 'apache/superset:dockerize' #comprobar esta imagen
+        imagePullPolicy: 'IfNotPresent'
+        command:
         - /bin/sh
         - -c
         - dockerize -wait "tcp://$DB_HOST:$DB_PORT" -wait "tcp://$REDIS_HOST:$REDIS_PORT"
@@ -126,13 +132,10 @@ spec:
         envFrom:
         - secretRef:
             name: 'superset-env'
-        image: 'jwilder/dockerize:latest'
-        imagePullPolicy: 'IfNotPresent'
-        name: wait-for-postgres-redis
       containers:
         - name: superset
-          image: docker.io/kubernetesbigdataeg/superset:2.1.0-1
-          imagePullPolicy: Always
+          image: docker.io/kubernetesbigdataeg/superset:4.0.0-1
+          imagePullPolicy: IfNotPresent
           command: ["/bin/sh","-c",". /app/pythonpath/superset_bootstrap.sh; celery --app=superset.tasks.celery_app:app worker"]
           env:
             - name: "SUPERSET_PORT"
@@ -155,8 +158,6 @@ spec:
             periodSeconds: 60
             successThreshold: 1
             timeoutSeconds: 60
-          resources:
-            {}
       volumes:
         - name: superset-config
           secret:
@@ -166,7 +167,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: superset-init-db
-  namespace: superset
+  namespace: default
 spec:
   template:
     metadata:
@@ -175,30 +176,34 @@ spec:
       securityContext:
         runAsUser: 0
       initContainers:
-      - command:
+      - name: wait-for-postgres
+        image: 'apache/superset:dockerize'
+        imagePullPolicy: 'IfNotPresent'
+        command:
         - /bin/sh
         - -c
         - dockerize -wait "tcp://$DB_HOST:$DB_PORT" -timeout 120s
         envFrom:
         - secretRef:
             name: 'superset-env'
-        image: 'jwilder/dockerize:latest'
-        imagePullPolicy: 'IfNotPresent'
-        name: wait-for-postgres
       containers:
       - name: superset-init-db
-        image: docker.io/kubernetesbigdataeg/superset:2.1.0-1
-        imagePullPolicy: Always
+        image: docker.io/kubernetesbigdataeg/superset:4.0.0-1
+        env:
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: superset-config
+              key: SECRET_KEY
         envFrom:
           - secretRef:
               name: superset-env
+        imagePullPolicy: IfNotPresent
         volumeMounts:
           - name: superset-config
             mountPath: "/app/pythonpath"
             readOnly: true
-        command: ["/bin/sh","-c",". /app/pythonpath/superset_bootstrap.sh; . /app/pythonpath/superset_init.sh"]
-        resources:
-          {}
+        command: ["/bin/sh","-c","echo $PATH;. /app/pythonpath/superset_bootstrap.sh; . /app/pythonpath/superset_init.sh"]
       volumes:
         - name: superset-config
           secret:

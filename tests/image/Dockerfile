@@ -1,66 +1,78 @@
-ARG PY_VER=3.9-slim
-ARG SUPERSET_VERSION=2.0.1
+FROM --platform=amd64 node:16-bookworm-slim AS builder
 
-FROM node:16-slim AS superset-node
+ARG SUPERSET_VERSION=4.0.0
+ENV BUILD_CMD="build" \
+    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+WORKDIR /app
 
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+RUN apt-get update -qq \
+    && apt-get install -yqq --no-install-recommends \ 
+        curl \
+        tar \
+        ca-certificates \
+        build-essential \
+        python3
 
-RUN apt-get update && apt-get install -y git \
-    && git clone https://github.com/apache/superset.git /app \
-    && cd /app \
-    && git checkout ${SUPERSET_VERSION} \
-    && apt-get remove -y git && apt-get autoremove -y
+RUN curl -L https://github.com/apache/superset/archive/refs/tags/${SUPERSET_VERSION}.tar.gz | tar xz
 
 WORKDIR /app/superset-frontend
-RUN npm ci
-RUN npm run build
 
-FROM python:${PY_VER} AS production
+RUN mkdir docker superset-frontend
+RUN mv /app/superset-${SUPERSET_VERSION}/docker/frontend-mem-nag.sh docker/
+RUN ./docker/frontend-mem-nag.sh
 
+RUN mv /app/superset-${SUPERSET_VERSION}/superset-frontend/package.json ./ \
+    && mv /app/superset-${SUPERSET_VERSION}/superset-frontend/package-lock.json ./ \
+    && npm ci
+
+RUN cp -r /app/superset-${SUPERSET_VERSION}/superset-frontend/* ./
+
+RUN npm run ${BUILD_CMD}
+
+FROM python:3.9-slim
+
+ARG SUPERSET_VERSION=4.0.0
+WORKDIR /app
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    FLASK_DEBUG=1 \
+    SUPERSET_ENV=production \
     FLASK_APP="superset.app:create_app()" \
     PYTHONPATH="/app/pythonpath" \
     SUPERSET_HOME="/app/superset_home" \
-    SUPERSET_PORT=8088 
+    SUPERSET_PORT=8088
 
-RUN mkdir -p ${PYTHONPATH} \
+RUN mkdir -p ${PYTHONPATH} superset/static superset-frontend apache_superset.egg-info requirements \
     && useradd --user-group -d ${SUPERSET_HOME} -m --no-log-init --shell /bin/bash superset \
-    && apt-get update -y \
-    && apt-get install -y --no-install-recommends \
+    && apt-get update -qq && apt-get install -yqq --no-install-recommends \
         build-essential \
-        curl \
         default-libmysqlclient-dev \
         libsasl2-dev \
         libsasl2-modules-gssapi-mit \
         libpq-dev \
         libecpg-dev \
         libldap2-dev \
-        libsasl2-dev \
+    && touch superset/static/version_info.json \
+    && chown -R superset:superset ./* \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=superset-node /app/requirements /app/requirements
-COPY --from=superset-node /app/setup.py /app/
-COPY --from=superset-node /app/MANIFEST.in /app/
-COPY --from=superset-node /app/README.md /app/
+COPY --from=builder /app/superset-${SUPERSET_VERSION}/setup.py . 
+COPY --from=builder /app/superset-${SUPERSET_VERSION}/MANIFEST.in ./
+COPY --from=builder /app/superset-${SUPERSET_VERSION}/README.md ./
+COPY --from=builder /app/superset-${SUPERSET_VERSION}/requirements/*.txt requirements/ 
+COPY --from=builder /app/superset-frontend/package.json superset-frontend/ 
 
-COPY --from=superset-node /app/superset-frontend/package.json /app/superset-frontend/
-RUN mkdir -p /app/superset/static && touch /app/superset/static/version_info.json
-COPY --from=superset-node /app/superset/static/assets /app/superset/static/assets
+RUN pip install -r requirements/local.txt
 
-RUN pip install --upgrade pip
+COPY --from=builder /app/superset/static/assets superset/static/assets
+COPY --from=builder /app/superset-${SUPERSET_VERSION}/superset superset/
 
-COPY --from=superset-node /app/superset /app/superset
-RUN cd /app \
-    && chown -R superset:superset * \
-    && pip install --no-cache -r requirements/local.txt \
-    && pip install -e . \
-    && flask fab babel-compile --target superset/translations
-    
-COPY --from=superset-node /app/docker/run-server.sh /usr/bin/
+RUN --mount=type=cache,target=/root/.cache/pip pip install -e . \
+    && flask fab babel-compile --target superset/translations \
+    && chown -R superset:superset superset/translations
+
+COPY --from=builder /app/superset-${SUPERSET_VERSION}/docker/run-server.sh /usr/bin/run-server.sh
 RUN chmod a+x /usr/bin/run-server.sh
-WORKDIR /app
-USER superset
+
+USER superset 
 EXPOSE ${SUPERSET_PORT}
-CMD /usr/bin/run-server.sh
+CMD ["/usr/bin/run-server.sh"]
