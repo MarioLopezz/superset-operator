@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: superset-create-db
+spec:
+  template:
+    spec:
+      containers:
+      - name: create-db
+        image: kubernetesbigdataeg/postgresql:15.0.0-1
+        command: ["psql"]
+        args:
+        - -c
+        - CREATE DATABASE $(DB_NAME);
+        - -h
+        - $(DB_HOST)
+        - -U
+        - $(DB_USER)
+        envFrom:
+        - secretRef:
+            name: superset-env
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: superset-env
+              key: DB_PASS
+      restartPolicy: Never
+  backoffLimit: 1
